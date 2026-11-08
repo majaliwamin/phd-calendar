@@ -12,20 +12,13 @@
   <header id="bar">
     <div class="ttlw"><button id="menu" title="Menu">☰</button><h1 id="ttl"></h1></div>
     <div class="tools">
-      <div class="daypick" id="daypick" role="group" aria-label="Weekday">
-        <button data-day="all" title="Show the whole week">Week</button>
-        <button data-day="0" title="Monday">Mon</button>
-        <button data-day="1" title="Tuesday">Tue</button>
-        <button data-day="2" title="Wednesday">Wed</button>
-        <button data-day="3" title="Thursday">Thu</button>
-        <button data-day="4" title="Friday">Fri</button>
-      </div>
       <label class="toolsel" title="Default length for new sessions">Duration
         <select id="dur"><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="90">90 min</option><option value="120">2 h</option></select></label>
+      <button id="newSession" title="Create a session" hidden>+ Session</button>
       <button id="pw" title="Previous week">◀</button><button id="today" title="Go to current week">Today</button><button id="nw" title="Next week">▶</button><select id="theme" title="Theme"></select><button id="undo" title="Undo">↶</button><button id="redo" title="Redo">↷</button>
       <span id="me" class="me"></span><span id="mode"></span>
       <div class="dl"><button id="dlbtn" title="Download timetable">⭳</button>
-        <div id="dlmenu" hidden><a data-x="pdf">Download PDF (full dashboard)</a><a data-x="png">Download PNG (full dashboard)</a><a data-x="docx">Download DOCX</a></div></div>
+        <div id="dlmenu" hidden><a data-x="screen">Download current screen (PNG)</a><a data-x="pdf">Download PDF (full dashboard)</a><a data-x="png">Download PNG (full dashboard)</a><a data-x="docx">Download DOCX</a></div></div>
     </div>
   </header>
   <section id="view"><div class="login"><div class="card login-card"><h2>PhD MNH Academic Calendar</h2><p class="login-status">Not signed in</p><label>Email<input id="calendarEmail" type="email" autocomplete="username" value="staff@ams"></label><label>Staff access token<input id="calendarToken" type="password" autocomplete="current-password"></label><div class="row"><button class="btn pri" id="calendarSignIn">Sign in</button></div></div></div></section>

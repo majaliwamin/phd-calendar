@@ -1,8 +1,9 @@
 const $=s=>document.querySelector(s);
-const S={w:0,view:'dashboard',edit:false,d:null,role:'',staffName:'',dev:false,day:-1,dur:60};
+const S={w:0,view:'dashboard',edit:false,d:null,role:'',staffName:'',dev:false,dur:60};
 try{const d=+localStorage.calDur;if([30,45,60,90,120].includes(d))S.dur=d}catch(_){}
 const canEditCalendar=()=>['admin','coordinator'].includes(S.role);
 const PX=60,T0=480,T1=1080,SNAP=15,DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const HPX=110,LANE=48,WORKDAYS=5;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const dayN=i=>new Date(Date.UTC(2026,10,9+i)),iso=d=>d.toISOString().slice(0,10);
 const F=(d,o)=>d.toLocaleDateString('en-GB',{timeZone:'UTC',...o});
@@ -23,9 +24,10 @@ const THEMES=[{id:'night',name:'Midnight Dark (default)',bg:'#0f1a2e',head:'#264
  {id:'slate',name:'Slate (dark)',bg:'#1e2430',head:'#2a6a8c',side:'#0f131a'},{id:'custom',name:'Custom background',bg:'#f4f6f9',head:'',side:'#14213d'}];
 const curTheme=()=>{try{return localStorage.theme||'night'}catch(_){return 'night'}};
 function applyTheme(){const t=THEMES.find(x=>x.id==curTheme())||THEMES[0],bg=t.id=='custom'?(localStorage.bgc||t.bg):t.bg,dark=lum(bg)<.179,
+ sideBase=t.side||'#14213d',side=dark&&Math.abs(lum(sideBase)-lum(bg))<.03?mixc(bg,'#ffffff',.11):sideBase,sideink=inkFor(side),sidemuted=mixc(sideink,side,.35),
  card=dark?mixc(bg,'#ffffff',.07):mixc(bg,'#ffffff',.85),head=t.head||(dark?'#2a6a8c':'#1f4e79'),ink=inkFor(card),R=document.documentElement.style;
  const set={'--bg':bg,'--card':card,'--card2':dark?mixc(bg,'#000000',.2):mixc(card,'#000000',.04),'--ink':ink,'--line':dark?mixc(bg,'#ffffff',.2):mixc(bg,'#000000',.15),
- '--muted':mixc(ink,card,.3),'--head':head,'--headink':inkFor(head),'--side':t.side,'--accent':dark?'#d4a640':'#9a6f12','--danger':dark?'#ff8a80':'#b3261e','color-scheme':dark?'dark':'light'};for(const k in set)R.setProperty(k,set[k])}
+ '--muted':mixc(ink,card,.3),'--head':head,'--headink':inkFor(head),'--side':side,'--sideink':sideink,'--sidemuted':sidemuted,'--accent':dark?'#d4a640':'#9a6f12','--danger':dark?'#ff8a80':'#b3261e','color-scheme':dark?'dark':'light'};for(const k in set)R.setProperty(k,set[k])}
 function setTheme(id){localStorage.theme=id;applyTheme();if($('#theme'))$('#theme').value=id;if(S.d)render()}
 const TYPES=[{id:'module',name:'Module session',color:'#2e7d4f'},{id:'journal',name:'Weekly Journal Club',color:'#b5530a'},{id:'conference',name:'Weekly Maternal Conference',color:'#7b3fa0'},
  {id:'exam',name:'Examination',color:'#b3261e'},{id:'recurring',name:'Recurring Activity',color:'#5f6b7a'},{id:'other',name:'Other session',color:'#0b6e8f'}];
@@ -69,23 +71,31 @@ function chrome(){
  $('#ttl').textContent=({dashboard:S.d.settings.title,weekly:wkName(S.w)+' · '+range(S.w)}[S.view])||navItems().find(n=>n[0]==S.view)?.[1]||'Academic Calendar';
  $('#mode').textContent=S.edit?'Editor ON':'';
  const dur=$('#dur');if(dur)dur.value=String(S.dur);
- document.querySelectorAll('#daypick [data-day]').forEach(b=>b.classList.toggle('on',b.dataset.day=='all'?S.day<0:+b.dataset.day==S.day));}
-function render(){if(S.view=='editor'&&!canEditCalendar())S.view='dashboard';document.body.classList.remove('so','login-mode');chrome();$('#view').innerHTML=({dashboard,weekly:()=>weeklyHTML(),monthly,modules,facilitators,editor,histV,exportV,settings,exams:examsV,recur:recurV,comms:commsV,history:histV})[S.view==='history'?'histV':S.view]();}
-/* ---------- weekly grid ---------- */
-const pos=e=>{const a=Math.max(mins(e.start),T0),b=Math.min(mins(e.end),T1);return b>a?{top:(a-T0)*PX/60,h:(b-a)*PX/60}:null};
+ const ns=$('#newSession');if(ns)ns.hidden=!canEditCalendar();}
+function render(){if(S.view=='editor'&&!canEditCalendar())S.view='dashboard';document.body.classList.remove('so','login-mode');chrome();
+ const V={dashboard,weekly:weeklyHTML,monthly,modules,facilitators,editor,histV,export:exportV,settings,exams:examsV,recur:recurV,comms:commsV,history:histV};
+ $('#view').innerHTML=(V[S.view]||V.dashboard)();}
+/* ---------- weekly timetable: days down, time across ---------- */
+const pos=e=>{const a=Math.max(mins(e.start),T0),b=Math.min(mins(e.end),T1);return b>a?{left:(a-T0)/60*HPX,w:(b-a)/60*HPX}:null};
 function lanes(evs){const s=[...evs].sort((a,b)=>mins(a.start)-mins(b.start)||mins(b.end)-mins(a.end)),out=[];let g=[],end=0;
  const fl=()=>{const L=[];g.forEach(e=>{let i=L.findIndex(x=>x<=mins(e.start));if(i<0){i=L.length;L.push(0)}L[i]=mins(e.end);e._l=i});g.forEach(e=>e._n=L.length);out.push(...g);g=[]};
  s.forEach(e=>{if(g.length&&mins(e.start)>=end){fl();end=0}g.push(e);end=Math.max(end,mins(e.end))});if(g.length)fl();return out}
 const stOf=e=>e.status=='cancelled'?'cancelled':(new Date(`${e.date}T${e.end||'23:59'}:00`)<new Date()?'completed':'upcoming');
-function evHTML(e){const p=pos(e);if(!p)return'';const f=fac(e.facilitator_id),m=mod(e.module_id),c=conflicts(e).length,w=100/e._n;
- return `<div class="ev k-${e.kind} ${e.status=='cancelled'?'cx':''}" data-id="${e.id}" style="top:${p.top}px;height:${p.h}px;left:calc(${e._l*w}% + 2px);width:calc(${w}% - 4px);background:${color(e)};color:${inkFor(color(e))};border-left:5px solid ${m?m.color:'rgba(0,0,0,.3)'}"><b>${c?'⚠ ':''}${esc(e.title)}</b>${e.start}–${e.end}${m?' · '+esc(m.code):''}${f?'<br>'+av(f,16)+esc(f.name):''}${e.venue?'<br>'+esc(e.venue):''}<div class="rs"></div></div>`}
-function weeklyHTML(){const evs=inWeek(S.w),one=S.view==='weekly'&&S.day>=0;let h='<div class="cal'+(one?' one':'')+'"><div></div>';
- for(let i=0;i<7;i++){const d=dayN(S.w*7+i);h+=`<div class="hd ${iso(d)==TODAY()?'today':''}${one&&i!=S.day?' off':''}">${DAYS[i]}<small>${F(d,{day:'numeric',month:'short'})}</small></div>`}
- h+='<div class="un"></div>';
- for(let i=0;i<7;i++)h+=`<div class="un${one&&i!=S.day?' off':''}">${evs.filter(e=>e.date==iso(dayN(S.w*7+i))&&!e.start).map(e=>`<span class="chip" data-id="${e.id}" style="background:${color(e)};color:${inkFor(color(e))}">⚠ ${esc(e.title)} (time not confirmed)</span>`).join('')}</div>`;
- h+='<div class="tl">'+[...Array((T1-T0)/60+1)].map((_,i)=>`<span style="top:${i*PX}px">${hhmm(T0+i*60)}</span>`).join('')+'</div>';
- for(let i=0;i<7;i++){const ds=iso(dayN(S.w*7+i));h+=`<div class="col ${i>4?'we':''}${one&&i!=S.day?' off':''}" data-date="${ds}">${lanes(evs.filter(e=>e.date==ds&&e.start)).map(evHTML).join('')}</div>`}
- return h+'</div>'+legendHTML()+'<p style="color:var(--muted);font-size:12px">Each row is one hour; sessions keep their exact start/end. Click an empty slot to create · drag to move · drag the bottom edge to resize · ⚠ marks conflicts.</p>'}
+function evHTML(e){const p=pos(e);if(!p)return'';const f=fac(e.facilitator_id),m=mod(e.module_id),c=conflicts(e).length;
+ const meta=[e.start+'–'+e.end,m&&m.code,f&&f.name,e.venue].filter(Boolean).join(' · ');
+ return `<div class="ev k-${e.kind} ${e.status=='cancelled'?'cx':''}" data-id="${e.id}" tabindex="0" role="button" title="${esc(e.title)} — ${esc(meta)}" style="left:${p.left}px;width:${p.w}px;top:${6+(e._l||0)*LANE}px;height:${LANE-8}px;background:${color(e)};color:${inkFor(color(e))};border-left-color:${m?m.color:'rgba(0,0,0,.3)'}"><span class="t1">${c?'⚠ ':''}${esc(e.title)}</span><span class="t2">${esc(meta)}</span><span class="rs" title="Drag to change the end time"></span></div>`}
+function weeklyHTML(){const evs=inWeek(S.w),TRACKW=(T1-T0)/60*HPX;
+ const hours=[...Array((T1-T0)/60)].map((_,i)=>`<span style="left:${i*HPX}px">${hhmm(T0+i*60)}</span>`).join('');
+ let rows='';
+ for(let i=0;i<WORKDAYS;i++){const d=dayN(S.w*7+i),ds=iso(d),dayEvs=lanes(evs.filter(e=>e.date==ds&&e.start)),un=evs.filter(e=>e.date==ds&&!e.start);
+  const rh=Math.max(1,...dayEvs.map(e=>e._n||1))*LANE+10;
+  const grid=[...Array((T1-T0)/60+1)].map((_,k)=>`<i class="hl" style="left:${k*HPX}px"></i>`).join('');
+  rows+=`<div class="ttrow" style="height:${rh}px"><div class="ttlabel${ds==TODAY()?' today':''}"><b>${DAYS[i]}</b><small>${F(d,{day:'numeric',month:'short'})}</small>${un.length?`<span class="ttun">⚠ ${un.length} time not confirmed</span>`:''}</div><div class="tttrack" data-date="${ds}" style="width:${TRACKW}px">${grid}${dayEvs.map(evHTML).join('')}</div></div>`}
+ const un=evs.filter(e=>!e.start);
+ return `<div class="ttwrap" tabindex="0" role="region" aria-label="${esc(wkName(S.w))} weekly timetable, days Monday to Friday and time across the top"><div class="tt"><div class="ttrow tt-head"><div class="ttlabel">Day</div><div class="tthours" style="width:${TRACKW}px">${hours}</div></div>${rows}</div></div>`
+  +(un.length?`<div class="ttunbar"><b>⚠ Time not confirmed:</b> ${un.map(e=>`<span class="chip" data-id="${e.id}" style="background:${color(e)};color:${inkFor(color(e))}">${esc(e.title)}</span>`).join('')}</div>`:'')
+  +legendHTML()+`<p class="hint">Days run down the left and time runs across the top. Scroll sideways to see the whole week · click an empty slot to create · drag a session to move it · drag its right edge to change the end time · ⚠ marks conflicts.</p>`}
+const defaultDate=()=>{const a=iso(dayN(S.w*7)),b=iso(dayN(S.w*7+WORKDAYS-1)),t=TODAY();return t>=a&&t<=b?t:a};
 const upcoming=()=>S.d.events.filter(e=>stOf(e)=='upcoming').sort((a,b)=>(a.date+(a.start||'')).localeCompare(b.date+(b.start||'')));
 const dT=e=>`${F(new Date(e.date),{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'})}${e.start?' '+e.start+'–'+e.end:''}`;
 function dashData(w){const ev=inWeek(w),c={completed:0,upcoming:0,cancelled:0};ev.forEach(e=>c[stOf(e)]++);
@@ -120,7 +130,7 @@ function editor(){return `<div class="card" style="max-width:640px"><h4>Universa
  <p style="font-size:12px">${S.edit?'Click the programme title (Settings) or a week in the sidebar with Shift to rename it; click any event to edit.':''}</p></div>`}
 function histV(){return `<table><tr><th>When</th><th>By</th><th>Item</th><th>Field</th><th>Previous</th><th>New</th><th></th></tr>`+S.d.history.map(h=>`<tr style="${h.undone?'opacity:.5':''}"><td>${h.ts.replace('T',' ')}</td><td>${esc(h.user)}</td><td>${esc(h.label)}</td><td>${esc(h.field)}</td><td>${esc(h.old)}</td><td>${esc(h.new)}</td><td>${canEditCalendar()?`<button class="btn" data-restore="${h.id}">Restore previous</button>`:''}</td></tr>`).join('')+'</table>'}
 function exportV(){return `<div class="card" style="max-width:560px"><h4>Export selected week (${esc(wkName(S.w))})</h4><div class="row">
- <button class="btn" data-x="pdf">PDF</button><button class="btn" data-x="docx">DOCX</button><button class="btn" data-x="png">PNG</button><button class="btn" onclick="print()">Print layout</button></div>
+ <button class="btn" data-x="screen">Current screen (PNG)</button><button class="btn" data-x="pdf">PDF</button><button class="btn" data-x="docx">DOCX</button><button class="btn" data-x="png">PNG</button><button class="btn" onclick="print()">Print layout</button></div>
  <h4 style="margin-top:14px">Share and backup</h4><div class="row"><button class="btn" data-ics>Shareable calendar (.ics)</button><button class="btn" data-backup>JSON backup</button><label class="btn">Restore JSON<input type="file" id="rst" accept=".json" hidden></label></div></div>`}
 function settings(){const o=THEMES.map(t=>`<option value="${t.id}" ${t.id==curTheme()?'selected':''}>${t.name}</option>`).join('');
  return `<div class="card" style="max-width:540px"><h4>Theme</h4><select id="themeS">${o}</select><div style="margin-top:8px"><label>Custom background <input type="color" id="cbg" value="${localStorage.bgc||'#f4f6f9'}" style="width:60px"></label></div><small>Text, grid lines, cards and headers adjust automatically for contrast.</small>
@@ -223,14 +233,19 @@ function modForm(id){const m=mod(id);dr(`<h3>Edit module</h3><label>Code<input i
 async function saveMod(id){await api('modules/'+id,'PUT',{code:$('#m_code').value,name:$('#m_name').value,color:$('#m_color').value});dr('');load()}
 /* ---------- drag / resize ---------- */
 document.addEventListener('pointerdown',e=>{const el=e.target.closest('.ev');if(!el||e.target.closest('.av'))return;
- const ev=S.d.events.find(x=>x.id==el.dataset.id),rs=e.target.classList.contains('rs'),cols=[...document.querySelectorAll('.col')],cw=cols[0].getBoundingClientRect().width;
- const x0=e.clientX,y0=e.clientY,s0=mins(ev.start),e0=mins(ev.end),di=cols.findIndex(c=>c.dataset.date==ev.date);let moved=false,ns=s0,ne=e0,nd=di;
- const mv=m=>{const dy=Math.round((m.clientY-y0)/PX*60/SNAP)*SNAP;if(Math.abs(m.clientY-y0)+Math.abs(m.clientX-x0)>4)moved=true;if(!moved)return;
-  if(rs){ne=Math.min(T1,Math.max(s0+SNAP,e0+dy))}else{ns=Math.min(T1-(e0-s0),Math.max(T0,s0+dy));ne=ns+e0-s0;nd=Math.min(6,Math.max(0,di+Math.round((m.clientX-x0)/cw)))}
-  el.style.top=(ns-T0)/60*PX+'px';el.style.height=(ne-ns)/60*PX+'px'};
+ const ev=S.d.events.find(x=>x.id==el.dataset.id);if(!ev)return;
+ const rs=e.target.classList.contains('rs'),tracks=[...document.querySelectorAll('.tttrack')];
+ const x0=e.clientX,y0=e.clientY,s0=mins(ev.start),e0=mins(ev.end);let moved=false,ns=s0,ne=e0,nd=ev.date;
+ const trackAt=y=>{const t=tracks.find(t=>{const r=t.getBoundingClientRect();return y>=r.top-2&&y<=r.bottom+2});return t?t.dataset.date:nd};
+ const mv=m=>{if(!canEditCalendar())return;if(Math.abs(m.clientX-x0)+Math.abs(m.clientY-y0)>4)moved=true;if(!moved)return;
+  const dt=Math.round((m.clientX-x0)/HPX*60/SNAP)*SNAP;
+  if(rs){ne=Math.min(T1,Math.max(s0+SNAP,e0+dt))}
+  else{ns=Math.min(T1-(e0-s0),Math.max(T0,s0+dt));ne=ns+e0-s0;nd=trackAt(m.clientY);
+   const tr=tracks.find(t=>t.dataset.date==nd);if(tr&&el.parentElement!==tr)tr.appendChild(el)}
+  el.style.left=(ns-T0)/60*HPX+'px';el.style.width=(ne-ns)/60*HPX+'px'};
  const up=async()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);
   if(!moved)return S.edit?form(ev.id):details(ev.id);
-  const ch={start:hhmm(ns),end:hhmm(ne),date:cols[nd].dataset.date},cf=conflicts({id:ev.id,...ch});
+  const ch={start:hhmm(ns),end:hhmm(ne),date:nd},cf=conflicts({id:ev.id,...ch});
   if(cf.length&&!confirm('Scheduling conflict with: '+cf.map(c=>c.title).join('; ')+'\nKeep this change?'))return load();
   await api('events/'+ev.id,'PUT',{changes:ch,scope:'one'});load()};
  addEventListener('pointermove',mv);addEventListener('pointerup',up);e.preventDefault()});
@@ -248,19 +263,28 @@ async function dashCanvas(){
  let y=40;T(S.d.settings.title,X,y,'bold 28px Georgia',V('--ink'));T(`${wkName(w)}: ${range(w)}`,X,y+28,'18px Georgia','#b8892b');x.strokeStyle='#b8892b';x.lineWidth=2;x.beginPath();x.moveTo(X,y+42);x.lineTo(W-P,y+42);x.stroke();x.lineWidth=1;y+=62;
  const cw=(GW-4*14)/5,ch=165;[['Current academic week',d.week],['Sessions this week',d.sess],['Upcoming examinations',d.exams],['Recurring activities',d.rec],['Facilitators',d.facs]].forEach(([t,l],i)=>card(X+i*(cw+14),y,cw,ch,t,l));y+=ch+14;
  const uh=44+Math.max(d.up.length,1)*18+8;card(X,y,GW,uh,'Upcoming academic activities',d.up);y+=uh+18;
- /* weekly timetable */
- const LW=56,CW=(GW-LW)/7,evs=d.ev,un=evs.filter(e=>!e.start),GH=(T1-T0)/60*PX;
- box(X,y,GW,44+30+GH);x.fillStyle=V('--head');x.fillRect(X,y,GW,44);
- for(let i=0;i<7;i++){const dd=dayN(w*7+i);T(DAYS[i],X+LW+i*CW+8,y+19,'bold 14px Georgia',V('--headink'));T(F(dd,{day:'numeric',month:'long'}),X+LW+i*CW+8,y+37,'12px Georgia',V('--headink'))}
- for(let i=0;i<7;i++)un.filter(e=>e.date==iso(dayN(w*7+i))).forEach((e,k)=>{x.fillStyle=color(e);x.fillRect(X+LW+i*CW+3,y+48+k*0,CW-6,22);T('⚠ '+e.title.slice(0,24)+' (time n/c)',X+LW+i*CW+7,y+63,'11px Georgia','#fff')});
- const gy=y+74;
- for(let h=0;h<=(T1-T0)/60;h++){x.strokeStyle=V('--line');x.beginPath();x.moveTo(X+LW-4,gy+h*PX);x.lineTo(X+GW,gy+h*PX);x.stroke();T(hhmm(T0+h*60),X+8,gy+h*PX+4,'11px Georgia',V('--muted'))}
- for(let i=0;i<=7;i++){x.strokeStyle=V('--line');x.beginPath();x.moveTo(X+LW+i*CW,y);x.lineTo(X+LW+i*CW,gy+GH);x.stroke()}
- for(let i=0;i<7;i++){const ds=iso(dayN(w*7+i));for(const e of lanes(evs.filter(q=>q.date==ds&&q.start))){const p=pos(e);if(!p)continue;const lw=CW/e._n,ex=X+LW+i*CW+e._l*lw+2,ey=gy+p.top,ew=lw-4,f=fac(e.facilitator_id),m=mod(e.module_id);
-  x.save();x.beginPath();x.rect(ex,ey,ew,p.h);x.clip();const ik=inkFor(color(e));x.fillStyle=color(e);x.fillRect(ex,ey,ew,p.h);x.fillStyle=m?m.color:'rgba(0,0,0,.3)';x.fillRect(ex,ey,5,p.h);
-  let ty=wr(e.title+(e.status=='cancelled'?' (cancelled)':''),ex+6,ey+14,ew-10,13,'bold 12px Georgia',ik);ty=wr(`${e.start}–${e.end}${m?' · '+m.code:''}`,ex+6,ty,ew-10,13,'11px Georgia',ik);
-  if(f){avc(f,ex+14,ty+8,8);wr(f.name,ex+26,ty+12,ew-34,12,'11px Georgia',ik)}x.restore()}}
- y=gy+GH+26;
+ /* weekly timetable (days down, time across) */
+ const LW=118,TW=GW-LW,hpx=TW/((T1-T0)/60),evs=d.ev,dayRows=[];
+ for(let i=0;i<WORKDAYS;i++){const ds=iso(dayN(w*7+i)),le=lanes(evs.filter(q=>q.date==ds&&q.start)),n=Math.max(1,...le.map(e=>e._n||1));
+  dayRows.push({i,ds,le,h:n*46+8,un:evs.filter(e=>e.date==ds&&!e.start)})}
+ const rowsH=dayRows.reduce((a,r)=>a+r.h,0),HH=36,tableH=HH+rowsH;
+ box(X,y,GW,tableH);x.fillStyle=V('--head');x.fillRect(X,y,GW,HH);
+ T('Day',X+10,y+23,'bold 12px Georgia',V('--headink'));
+ for(let h=1;h<(T1-T0)/60;h++)T(hhmm(T0+h*60),X+LW+h*hpx+4,y+23,'11px Georgia',V('--headink'));
+ let ry=y+HH;
+ dayRows.forEach(r=>{const dd=dayN(w*7+r.i);
+  x.fillStyle=V('--card2');x.fillRect(X,ry,LW,r.h);
+  T(DAYS[r.i],X+10,ry+20,'bold 13px Georgia',V('--ink'));T(F(dd,{day:'numeric',month:'short'}),X+10,ry+36,'11px Georgia',V('--muted'));
+  if(r.un.length)T('⚠ '+r.un.length+' unconfirmed',X+10,ry+52,'10px Georgia','#b8892b');
+  for(let h=0;h<=(T1-T0)/60;h++){const hx=X+LW+h*hpx;x.strokeStyle=V('--line');x.beginPath();x.moveTo(hx,ry);x.lineTo(hx,ry+r.h);x.stroke()}
+  x.strokeStyle=V('--line');x.strokeRect(X+LW,ry,TW,r.h);
+  r.le.forEach(e=>{const a=Math.max(mins(e.start),T0),b=Math.min(mins(e.end),T1);if(b<=a)return;const ex=X+LW+(a-T0)/60*hpx,ew=(b-a)/60*hpx,ey=ry+4+(e._l||0)*46,eh=40,m=mod(e.module_id),ik=inkFor(color(e));
+   x.save();x.beginPath();x.rect(ex,ey,ew,eh);x.clip();x.fillStyle=color(e);x.fillRect(ex,ey,ew,eh);x.fillStyle=m?m.color:'rgba(0,0,0,.3)';x.fillRect(ex,ey,4,eh);
+   let ty=wr(e.title+(e.status=='cancelled'?' (cancelled)':''),ex+7,ey+14,ew-12,13,'bold 11px Georgia',ik);wr(`${e.start}–${e.end}${m?' · '+m.code:''}`,ex+7,ty,ew-12,12,'10px Georgia',ik);x.restore()});
+  ry+=r.h});
+ y=y+tableH+18;
+ const unc=evs.filter(e=>!e.start);
+ if(unc.length){T('TIME NOT CONFIRMED',X,y,'bold 10px Georgia','#b8892b');y+=14;unc.forEach(e=>{T(`${F(new Date(e.date),{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'})} · ${e.title}`,X,y,'11px Georgia',V('--ink'));y+=15});y+=6}else y+=6;
  /* legend, facilitators, notices */
  T('CALENDAR LEGEND – MODULES','X'.length?X:X,y,'bold 12px Georgia','#b8892b');y+=10;
  S.d.modules.forEach((m,i)=>{const cx=X+(i%2)*(GW/2),cy=y+Math.floor(i/2)*24;x.fillStyle=m.color;x.fillRect(cx,cy,14,14);T(`${m.code} – ${m.name}`.slice(0,70),cx+22,cy+12,'12px Georgia',V('--ink'))});y+=Math.ceil(S.d.modules.length/2)*24+4;
@@ -291,18 +315,60 @@ function pdfBlob(cv){const jpg=atob(cv.toDataURL('image/jpeg',.93).split(',')[1]
  const xr=len;add('xref\n0 6\n0000000000 65535 f \n'+[1,2,3,4,5].map(n=>String(off[n]).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n${xr}\n%%EOF`);
  const s=parts.join(''),u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i)&255;return new Blob([u],{type:'application/pdf'})}
 async function pdfExport(){dl(pdfBlob(await dashCanvas()),`dashboard-week${11+S.w}.pdf`)}
+/* ---------- current-screen export: transposed week timetable ---------- */
+async function ttCanvas(){
+ const SC=2,P=28,LW=132,TRACK=(T1-T0)/60*HPX,W=P+LW+TRACK+P,evs=inWeek(S.w),days=[];
+ for(let i=0;i<WORKDAYS;i++){const ds=iso(dayN(S.w*7+i)),le=lanes(evs.filter(e=>e.date==ds&&e.start)),n=Math.max(1,...le.map(e=>e._n||1));
+  days.push({i,ds,le,h:n*LANE+10,un:evs.filter(e=>e.date==ds&&!e.start)})}
+ const rowsH=days.reduce((a,r)=>a+r.h,0),HH=34,unc=evs.filter(e=>!e.start);
+ const legendH=16+Math.ceil(TYPES.length/3)*20+6,uncH=unc.length?15+unc.length*15+4:0,H=P+66+HH+rowsH+18+uncH+legendH+24;
+ if(document.fonts)await document.fonts.ready;
+ const cv=document.createElement('canvas');cv.width=W*SC;cv.height=H*SC;const x=cv.getContext('2d');x.scale(SC,SC);
+ x.fillStyle=V('--bg');x.fillRect(0,0,W,H);
+ const T=(t,px,py,f,c)=>{x.font=f;x.fillStyle=c;x.fillText(t,px,py)},tx=P+LW;
+ T(S.d.settings.title,P,42,'bold 24px Georgia',V('--ink'));
+ T(`${wkName(S.w)}: ${range(S.w)} · Weekly timetable`,P,64,'16px Georgia',V('--accent'));
+ x.strokeStyle=V('--accent');x.lineWidth=2;x.beginPath();x.moveTo(P,78);x.lineTo(W-P,78);x.stroke();x.lineWidth=1;
+ let y=P+66;
+ x.fillStyle=V('--card');x.fillRect(P,y,W-2*P,HH+rowsH);x.strokeStyle=V('--line');x.strokeRect(P,y,W-2*P,HH+rowsH);
+ x.fillStyle=V('--head');x.fillRect(P,y,W-2*P,HH);
+ T('Day',P+10,y+22,'bold 12px Georgia',V('--headink'));
+ for(let h=0;h<(T1-T0)/60;h++)T(hhmm(T0+h*60),tx+h*HPX+4,y+22,'11px Georgia',V('--headink'));
+ x.strokeStyle=V('--line');x.beginPath();x.moveTo(tx,y);x.lineTo(tx,y+HH+rowsH);x.stroke();
+ let ry=y+HH;
+ days.forEach(r=>{
+  x.fillStyle=V('--card2');x.fillRect(P,ry,LW,r.h);
+  T(DAYS[r.i],P+10,ry+20,'bold 13px Georgia',V('--ink'));
+  T(F(dayN(S.w*7+r.i),{day:'numeric',month:'short'}),P+10,ry+36,'11px Georgia',V('--muted'));
+  if(r.un.length)T('⚠ '+r.un.length+' unconfirmed',P+10,ry+52,'10px Georgia',V('--accent'));
+  for(let h=0;h<=(T1-T0)/60;h++){const hx=tx+h*HPX;x.strokeStyle=V('--line');x.beginPath();x.moveTo(hx,ry);x.lineTo(hx,ry+r.h);x.stroke()}
+  x.strokeStyle=V('--line');x.beginPath();x.moveTo(P,ry+r.h);x.lineTo(W-P,ry+r.h);x.stroke();
+  r.le.forEach(e=>{const a=Math.max(mins(e.start),T0),b=Math.min(mins(e.end),T1);if(b<=a)return;
+   const ex=tx+(a-T0)/60*HPX,ew=(b-a)/60*HPX,ey=ry+5+(e._l||0)*LANE,eh=LANE-10,m=mod(e.module_id),ik=inkFor(color(e));
+   x.save();x.beginPath();x.rect(ex,ey,ew,eh);x.clip();x.fillStyle=color(e);x.fillRect(ex,ey,ew,eh);x.fillStyle=m?m.color:'rgba(0,0,0,.3)';x.fillRect(ex,ey,4,eh);
+   T((e.status=='cancelled'?'✕ ':'')+e.title,ex+7,ey+15,'bold 11px Georgia',ik);
+   T(`${e.start}–${e.end}${m?' · '+m.code:''}`,ex+7,ey+29,'10px Georgia',ik);x.restore()});
+  ry+=r.h});
+ y=ry+18;
+ if(unc.length){T('TIME NOT CONFIRMED',P,y,'bold 10px Georgia',V('--accent'));y+=15;unc.forEach(e=>{T(`${F(new Date(e.date),{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'})} · ${e.title}${mod(e.module_id)?' · '+mod(e.module_id).code:''}`,P,y,'11px Georgia',V('--ink'));y+=15});y+=4}
+ T('SESSION TYPES',P,y,'bold 10px Georgia',V('--accent'));y+=16;
+ TYPES.forEach((t,i)=>{const cx=P+(i%3)*(TRACK/3),cy=y+Math.floor(i/3)*20;x.fillStyle=typeColor(t);x.fillRect(cx,cy,13,13);T(t.name,cx+20,cy+11,'11px Georgia',V('--ink'))});
+ y+=Math.ceil(TYPES.length/3)*20+6;
+ T(`Exported ${new Date().toLocaleString('en-GB')} · ${wkName(S.w)} (${range(S.w)})`,P,y,'10px Georgia',V('--muted'));
+ return cv}
+async function screenExport(){const c=S.view==='weekly'?await ttCanvas():await dashCanvas();c.toBlob(b=>dl(b,`${S.view==='weekly'?'weekly-timetable':'dashboard'}-week${11+S.w}.png`))}
 /* ---------- events ---------- */
 document.addEventListener('click',async e=>{const t=e.target,q=s=>t.closest(s);
  if(!q('.dl'))$('#dlmenu').hidden=true;
- if(q('#pw')||q('#nw')){S.w=Math.min(NWK()-1,Math.max(0,S.w+(q('#nw')?1:-1)));S.view=S.view=='dashboard'?'dashboard':'weekly';render()}else if(q('#today')){const k=Math.floor((new Date(TODAY()+'T00:00:00Z')-dayN(0))/864e5/7);S.w=Math.min(NWK()-1,Math.max(0,k));render()}else if(q('#daypick [data-day]')){const v=q('#daypick [data-day]').dataset.day;S.day=v=='all'?-1:+v;S.view='weekly';dr('');render()}else if(q('[data-go]')){S.view=q('[data-go]').dataset.go;render()}else if(q('#menu')){document.body.classList.toggle(innerWidth<800?'so':'sc')}else if(q('#dlbtn'))$('#dlmenu').hidden=!$('#dlmenu').hidden;
- else if(q('[data-x]')){const x=q('[data-x]').dataset.x;$('#dlmenu').hidden=true;if(x=='png')pngExport();else if(x=='pdf')pdfExport();else await downloadProtected(`/api/export/${x}?week=${S.w}`,`week${11+S.w}.${x}`)}
+ if(q('#pw')||q('#nw')){S.w=Math.min(NWK()-1,Math.max(0,S.w+(q('#nw')?1:-1)));S.view=S.view=='dashboard'?'dashboard':'weekly';render()}else if(q('#today')){const k=Math.floor((new Date(TODAY()+'T00:00:00Z')-dayN(0))/864e5/7);S.w=Math.min(NWK()-1,Math.max(0,k));render()}else if(q('#newSession')){form(0,{date:defaultDate(),start:'09:00',end:hhmm(Math.min(540+S.dur,T1))})}else if(q('[data-go]')){S.view=q('[data-go]').dataset.go;render()}else if(q('#menu')){document.body.classList.toggle(innerWidth<800?'so':'sc')}else if(q('#dlbtn'))$('#dlmenu').hidden=!$('#dlmenu').hidden;
+ else if(q('[data-x]')){const x=q('[data-x]').dataset.x;$('#dlmenu').hidden=true;if(x=='screen')screenExport();else if(x=='png')pngExport();else if(x=='pdf')pdfExport();else await downloadProtected(`/api/export/${x}?week=${S.w}`,`week${11+S.w}.${x}`)}
  else if(q('[data-backup]'))await downloadProtected('/api/backup','calendar-backup.json');
  else if(q('[data-ics]'))await downloadProtected('/api/ics','calendar.ics');
  else if(q('[data-w]')){if(S.edit&&e.shiftKey){const w=+q('[data-w]').dataset.w,n=prompt('Week label',wkName(w));if(n)await api('settings/0','PUT',{['wk'+w]:n}),load();return}S.w=+q('[data-w]').dataset.w;S.view='weekly';dr('');render()}
  else if(q('[data-v]')){S.view=q('[data-v]').dataset.v;dr('');render()}
  else if(q('.av[data-fac]'))facCard(q('.av').dataset.fac);
  else if(q('.ev')||q('.chip[data-id]')){if(q('.chip'))S.edit?form(+q('.chip').dataset.id):details(+q('.chip').dataset.id)}
- else if(q('.col')&&!q('.ev')&&S.edit&&canEditCalendar()){const c=q('.col'),y=e.clientY-c.getBoundingClientRect().top,s=T0+Math.floor(y/PX*60/SNAP)*SNAP;form(0,{date:c.dataset.date,start:hhmm(s),end:hhmm(Math.min(s+S.dur,T1))})}
+ else if(q('.tttrack')&&!q('.ev')&&S.edit&&canEditCalendar()){const tr=q('.tttrack'),r=tr.getBoundingClientRect(),m0=T0+Math.round((e.clientX-r.left)/HPX*60/SNAP)*SNAP,s=Math.max(T0,Math.min(T1-S.dur,m0));form(0,{date:tr.dataset.date,start:hhmm(s),end:hhmm(Math.min(s+S.dur,T1))})}
  else if(q('[data-mod]'))modForm(+q('[data-mod]').dataset.mod);
  else if(q('[data-fac-edit]'))facForm(+q('[data-fac-edit]').dataset.facEdit);
  else if(q('[data-fac-new]'))facForm(0);
@@ -315,6 +381,6 @@ document.addEventListener('click',async e=>{const t=e.target,q=s=>t.closest(s);
 document.addEventListener('change',async e=>{const t=e.target;if(t.id=='dur'){const v=+t.value;if([30,45,60,90,120].includes(v)){S.dur=v;try{localStorage.calDur=v}catch(_){}}return}if(t.id=='theme'||t.id=='themeS'){setTheme(t.value);return}if(t.id=='cbg'){localStorage.bgc=t.value;setTheme('custom');return}if(t.classList&&t.classList.contains('tcol')){await api('settings/0','PUT',{['tc_'+t.dataset.t]:t.value});load();return}if(e.target.id=='rst'){const r=await api('restore','POST',JSON.parse(await e.target.files[0].text()));load()}});
 document.addEventListener('dblclick',async e=>{if(S.edit&&e.target.id=='ttl'){const n=prompt('Programme title',S.d.settings.title);if(n){await api('settings/0','PUT',{title:n});load()}}});
 let BUSY=false;for(const n of ['saveEv','saveFac','dup','del','saveMod','delFac','rmAv']){const o=window[n];window[n]=async(...a)=>{if(BUSY)return;BUSY=true;const bt=[...document.querySelectorAll('#drawer .btn')];bt.forEach(b=>b.disabled=true);try{await o(...a)}catch(e){if(e)console.error(e)}finally{BUSY=false;bt.forEach(b=>b.disabled=false)}}}
-addEventListener('keydown',e=>{if(e.key=='Escape'){$('#dlmenu').hidden=true;closeDrawer()}});$('#drawer').addEventListener('input',()=>{DIRTY=true});
+addEventListener('keydown',e=>{if(e.key=='Escape'){$('#dlmenu').hidden=true;closeDrawer()}else if((e.key=='Enter'||e.key==' ')&&e.target.classList&&e.target.classList.contains('ev')){e.preventDefault();const id=+e.target.dataset.id;S.edit?form(id):details(id)}});$('#drawer').addEventListener('input',()=>{DIRTY=true});
 applyTheme();$('#theme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');$('#theme').value=curTheme();$('#dur').value=String(S.dur);
 showCalendarLogin();setTimeout(load,800);
