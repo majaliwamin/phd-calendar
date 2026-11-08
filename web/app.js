@@ -54,7 +54,7 @@ function showCalendarLogin(message=''){document.body.classList.remove('so');docu
  $('#calendarSignIn').onclick=go;token.onkeydown=e=>{if(e.key=='Enter'){e.preventDefault();go()}}}
 async function load(){
  try{const who=await api('comms/whoami');S.role=who.role;S.staffName=who.name;S.dev=!!who.dev;S.d=await api('bootstrap');render()}
- catch(e){const m=String(e&&e.message||e);if(/\b401\b|not signed in|sign in with|invalid or expired/i.test(m)){const had=!!sessionStorage.ctoken;sessionStorage.removeItem('ctoken');showCalendarLogin(had?'Invalid or expired staff access token.':'')}else showLoadError(m)}}
+ catch(e){const m=String(e&&e.message||e);if(/\b401\b|not signed in|sign in with|invalid or expired/i.test(m)){const had=!!sessionStorage.ctoken;sessionStorage.removeItem('ctoken');if(had)showCalendarLogin('Invalid or expired staff access token.');else if(!document.querySelector('.login-card'))showCalendarLogin()}else showLoadError(m)}}
 function showLoadError(message){S.dev=false;document.body.classList.remove('so','login-mode');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Calendar could not load';$('#mode').textContent='';$('#view').innerHTML=`<div class="card" style="max-width:480px;margin:8vh auto;padding:28px"><h2>Calendar could not load</h2><p>${esc(message)}</p><div class="row"><button class="btn pri" id="retryLoad">Retry</button></div></div>`;$('#retryLoad').onclick=()=>load()}
 function conflicts(e){return S.d.events.filter(o=>o.id!=e.id&&o.date==e.date&&(()=>{const a=mins(e.start),b=mins(o.start);
  return a==null||b==null||(a<mins(o.end)&&b<mins(e.end))})())}
@@ -67,7 +67,7 @@ function chrome(){
  $('#nav').innerHTML=SIDE().map(it=>it.w!=null?`<button class="wk ${it.w==S.w?'on':''}" data-w="${it.w}" title="${esc(wkName(it.w))}: ${range(it.w)}"><b>${esc(wkName(it.w))}</b><span>${range(it.w)}</span></button>`:`<button data-v="${it.k}" class="${it.k==S.view?'on':''}">${it.n}</button>`).join('');
  $('#me').innerHTML=meChip();
  $('#ttl').textContent=({dashboard:S.d.settings.title,weekly:wkName(S.w)+' · '+range(S.w)}[S.view])||navItems().find(n=>n[0]==S.view)?.[1]||'Academic Calendar';
- $('#mode').textContent=[S.edit?'Editor ON':'',S.dev?'Dev mode – no sign-in':''].filter(Boolean).join(' · ');
+ $('#mode').textContent=S.edit?'Editor ON':'';
  const dur=$('#dur');if(dur)dur.value=String(S.dur);
  document.querySelectorAll('#daypick [data-day]').forEach(b=>b.classList.toggle('on',b.dataset.day=='all'?S.day<0:+b.dataset.day==S.day));}
 function render(){if(S.view=='editor'&&!canEditCalendar())S.view='dashboard';document.body.classList.remove('so','login-mode');chrome();$('#view').innerHTML=({dashboard,weekly:()=>weeklyHTML(),monthly,modules,facilitators,editor,histV,exportV,settings,exams:examsV,recur:recurV,comms:commsV,history:histV})[S.view==='history'?'histV':S.view]();}
@@ -317,4 +317,4 @@ document.addEventListener('dblclick',async e=>{if(S.edit&&e.target.id=='ttl'){co
 let BUSY=false;for(const n of ['saveEv','saveFac','dup','del','saveMod','delFac','rmAv']){const o=window[n];window[n]=async(...a)=>{if(BUSY)return;BUSY=true;const bt=[...document.querySelectorAll('#drawer .btn')];bt.forEach(b=>b.disabled=true);try{await o(...a)}catch(e){if(e)console.error(e)}finally{BUSY=false;bt.forEach(b=>b.disabled=false)}}}
 addEventListener('keydown',e=>{if(e.key=='Escape'){$('#dlmenu').hidden=true;closeDrawer()}});$('#drawer').addEventListener('input',()=>{DIRTY=true});
 applyTheme();$('#theme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');$('#theme').value=curTheme();$('#dur').value=String(S.dur);
-load();
+showCalendarLogin();setTimeout(load,800);

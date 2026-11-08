@@ -16,7 +16,7 @@ Open `http://127.0.0.1:8000`. Data is stored in `backend/data/` and persists acr
 
 ### Local development sign-in bypass
 
-Outside production the backend starts a local development session automatically: the browser opens straight into the dashboard and API requests are authorised as an admin-equivalent **Aminiology Ma** staff account. No token, staff credentials, or manual sign-in is needed locally. This only bypasses *authentication* — role checks, audit history and stored records behave exactly as before.
+Outside production the backend starts a local development session automatically: the browser first shows the sign-in page, then signs in automatically after a moment and API requests are authorised as an admin-equivalent **Aminiology Ma** staff account. No token, staff credentials, or manual sign-in is needed locally. This only bypasses *authentication* — role checks, audit history and stored records behave exactly as before.
 
 The mode is decided by the environment on every start:
 
@@ -24,7 +24,7 @@ The mode is decided by the environment on every start:
 - `CAL_ENV=production` (or `prod`, `staging`, `stage`) → bypass **off**; a valid Staff Bearer token is required exactly as in earlier releases. `APP_ENV`, `ENVIRONMENT` and `FASTAPI_ENV` are accepted as aliases.
 - `CAL_DEV_AUTH=0` → force the bypass off even in development. Production always wins over `CAL_DEV_AUTH`.
 
-The backend prints `[auth] Development login bypass ON` at startup when active, and the web header shows **Dev mode – no sign-in**. The Flutter shell makes the same tokenless probe, so it also skips its native sign-in screen while the backend is in development mode. Deployments must set `CAL_ENV=production` (and use HTTPS, firewalling, and an operational backup policy) before exposing the service.
+The backend prints `[auth] Development login bypass ON` at startup when active. The Flutter shell makes the same tokenless probe, so it also skips its native sign-in screen while the backend is in development mode. Deployments must set `CAL_ENV=production` (and use HTTPS, firewalling, and an operational backup policy) before exposing the service.
 
 For LAN access, bind to `0.0.0.0` only on a trusted network and use the host computer's LAN address from other devices. For public deployment, put the service behind HTTPS and a reverse proxy, restrict network access, and protect the data directory.
 
