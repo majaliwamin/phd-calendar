@@ -11,6 +11,7 @@ FIELDS = {
     "events": {"title", "module_id", "facilitator_id", "venue", "description", "date", "start", "end", "kind", "status", "stype", "deleted"},
     "facilitators": {"name", "designation", "module_id", "contact", "avatar", "deleted"},
     "modules": {"code", "name", "color"},
+    "assignments": {"title", "module_id", "due_date", "due_time", "deleted"},
 }
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS modules(id INTEGER PRIMARY KEY, code TEXT, name TEXT, color TEXT);
@@ -19,6 +20,14 @@ CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, title TEXT, module_id 
   date TEXT, start TEXT, end TEXT, kind TEXT DEFAULT 'session', series_id INTEGER, overridden INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY, ts TEXT, user TEXT, entity TEXT, eid INTEGER, label TEXT, field TEXT, old TEXT, new TEXT, undone INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS assignments(
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    module_id INTEGER NOT NULL,
+    due_date TEXT NOT NULL,
+    due_time TEXT NOT NULL DEFAULT '23:59',
+    deleted INTEGER DEFAULT 0
+);
 """
 
 def conn():
@@ -30,6 +39,9 @@ def init():
     os.makedirs(UPLOADS, exist_ok=True)
     with conn() as c:
         c.executescript(SCHEMA)
+        cols = {row["name"] for row in c.execute("PRAGMA table_info(assignments)")}
+        if "due_time" not in cols:
+            c.execute("ALTER TABLE assignments ADD COLUMN due_time TEXT NOT NULL DEFAULT '23:59'")
         for col in ("status TEXT DEFAULT 'scheduled'", "stype TEXT"):  # migration: existing data is kept
             try:
                 c.execute(f"alter table events add column {col}")
@@ -53,7 +65,7 @@ def seed(c):
         for i in range(36):
             d = START + dt.timedelta(days=i)
             if d.weekday() == wd:
-                c.execute("insert into events(title,date,start,end,kind,series_id) values('Recurring Activity – Edit Details',?,?,?,'recurring',?)",
+                c.execute("insert into events(title,date,start,end,kind,series_id) values('Recurring Activity â€“ Edit Details',?,?,?,'recurring',?)",
                           (d.isoformat(), s, e, sid))
 
 def _norm(v):
@@ -63,7 +75,7 @@ def label(c, ent, eid):
     if ent == "settings":
         return "Settings"
     r = c.execute(f"select * from {ent} where id=?", (eid,)).fetchone()
-    return (r["title"] if ent == "events" else r["name"] if ent == "facilitators" else r["code"]) if r else str(eid)
+    return (r["title"] if ent in ("events", "assignments") else r["name"] if ent == "facilitators" else r["code"]) if r else str(eid)
 
 def update(c, user, ent, eid, changes):
     for k, v in changes.items():

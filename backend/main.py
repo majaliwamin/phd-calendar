@@ -1,4 +1,4 @@
-"""FastAPI backend. Run: uvicorn main:app --port 8000"""
+﻿"""FastAPI backend. Run: uvicorn main:app --port 8000"""
 import os, json, uuid, base64, urllib.parse
 from fastapi import FastAPI, Request, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -47,6 +47,7 @@ def bootstrap():
         return {"modules": rows(c, "select * from modules"),
                 "facilitators": rows(c, "select * from facilitators where deleted=0"),
                 "events": rows(c, "select * from events where deleted=0"),
+                "assignments": rows(c, "select * from assignments where deleted=0"),
                 "history": rows(c, "select * from history order by id desc limit 300"),
                 "settings": {r["k"]: r["v"] for r in c.execute("select * from settings")}}
 
@@ -81,6 +82,28 @@ def del_event(eid: int, r: Request):
         db.update(c, who(r), "events", eid, {"deleted": 1})
     return {"ok": True}
 
+@app.post("/api/assignments")
+async def new_assignment(r: Request):
+    u = who(r); b = await r.json()
+    with db.conn() as c:
+        aid = c.execute(
+            "insert into assignments(title,module_id,due_date,due_time,deleted) values('',0,'','','1')"
+        ).lastrowid
+        db.update(c, u, "assignments", aid, {**b, "deleted": 0})
+    return {"id": aid}
+
+@app.put("/api/assignments/{aid}")
+async def put_assignment(aid: int, r: Request):
+    u = who(r); b = await r.json()
+    with db.conn() as c:
+        db.update(c, u, "assignments", aid, b["changes"])
+    return {"ok": True}
+
+@app.delete("/api/assignments/{aid}")
+def del_assignment(aid: int, r: Request):
+    with db.conn() as c:
+        db.update(c, who(r), "assignments", aid, {"deleted": 1})
+    return {"ok": True}
 @app.post("/api/facilitators")
 async def new_fac(r: Request):
     u = who(r); b = await r.json()
@@ -155,7 +178,7 @@ def restore(hid: int, r: Request):
 @app.get("/api/backup")
 def backup():
     with db.conn() as c:
-        d = {t: rows(c, f"select * from {t}") for t in ("modules", "facilitators", "events", "history", "settings")}
+        d = {t: rows(c, f"select * from {t}") for t in ("modules", "facilitators", "events", "assignments", "history", "settings")}
     d["avatars"] = {f["avatar"]: base64.b64encode(open(os.path.join(db.UPLOADS, f["avatar"]), "rb").read()).decode()
                     for f in d["facilitators"] if f["avatar"] and os.path.exists(os.path.join(db.UPLOADS, f["avatar"]))}
     return Response(json.dumps(d), media_type="application/json", headers={"Content-Disposition": "attachment; filename=calendar-backup.json"})
@@ -166,9 +189,9 @@ async def restore_backup(r: Request):
     for n, b in d.get("avatars", {}).items():
         open(os.path.join(db.UPLOADS, os.path.basename(n)), "wb").write(base64.b64decode(b))
     with db.conn() as c:
-        for t in ("modules", "facilitators", "events", "history", "settings"):
+        for t in ("modules", "facilitators", "events", "assignments", "history", "settings"):
             c.execute(f"delete from {t}")
-            for row in d[t]:
+            for row in d.get(t, []):
                 c.execute(f"insert into {t}({','.join(row)}) values({','.join('?' * len(row))})", list(row.values()))
     return {"ok": True}
 
