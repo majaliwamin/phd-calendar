@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PhD Maternal and Neonatal Health – Academic Calendar</title>
 <link rel="stylesheet" href="style.css"></head>
-<body>
+<body class="login-mode">
 <aside id="side">
   <div class="brand">PhD in Maternal<br>and Neonatal Health<small>Academic Calendar 2026</small></div>
   <div class="sb-scroll"><nav id="nav"></nav></div>
@@ -28,7 +28,7 @@
         <div id="dlmenu" hidden><a data-x="pdf">Download PDF (full dashboard)</a><a data-x="png">Download PNG (full dashboard)</a><a data-x="docx">Download DOCX</a></div></div>
     </div>
   </header>
-  <section id="view"></section>
+  <section id="view"><div class="login"><div class="card login-card"><h2>PhD MNH Academic Calendar</h2><p class="login-status">Not signed in</p><label>Email<input id="calendarEmail" type="email" autocomplete="username" value="staff@ams"></label><label>Staff access token<input id="calendarToken" type="password" autocomplete="current-password"></label><div class="row"><button class="btn pri" id="calendarSignIn">Sign in</button></div></div></div></section>
 </main>
 <aside id="drawer" hidden></aside>
 <script src="app.js"></script>
