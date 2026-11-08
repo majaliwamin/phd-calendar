@@ -12,7 +12,19 @@ pip install -r requirements.txt
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000`. Data is stored in `backend/data/` and persists across restarts. Keep this folder private. The first start creates `backend/data/ADMIN_TOKEN.txt`; paste that token into the calendar sign-in screen. Do not publish, email, or commit this token. The administrator can create staff tokens under **WhatsApp & Communications → Access**.
+Open `http://127.0.0.1:8000`. Data is stored in `backend/data/` and persists across restarts. Keep this folder private. The first start creates `backend/data/ADMIN_TOKEN.txt`. Do not publish, email, or commit this token. The administrator can create staff tokens under **WhatsApp & Communications → Access**.
+
+### Local development sign-in bypass
+
+Outside production the backend starts a local development session automatically: the browser opens straight into the dashboard and API requests are authorised as an admin-equivalent **Local developer** staff account. No token, staff credentials, or manual sign-in is needed locally. This only bypasses *authentication* — role checks, audit history and stored records behave exactly as before.
+
+The mode is decided by the environment on every start:
+
+- `CAL_ENV` unset, or `development` / `test` → bypass **on** (the bundled `run.bat` / `run.sh` set `CAL_ENV=development`).
+- `CAL_ENV=production` (or `prod`, `staging`, `stage`) → bypass **off**; a valid Staff Bearer token is required exactly as in earlier releases. `APP_ENV`, `ENVIRONMENT` and `FASTAPI_ENV` are accepted as aliases.
+- `CAL_DEV_AUTH=0` → force the bypass off even in development. Production always wins over `CAL_DEV_AUTH`.
+
+The backend prints `[auth] Development login bypass ON` at startup when active, and the web header shows **Dev mode – no sign-in**. The Flutter shell makes the same tokenless probe, so it also skips its native sign-in screen while the backend is in development mode. Deployments must set `CAL_ENV=production` (and use HTTPS, firewalling, and an operational backup policy) before exposing the service.
 
 For LAN access, bind to `0.0.0.0` only on a trusted network and use the host computer's LAN address from other devices. For public deployment, put the service behind HTTPS and a reverse proxy, restrict network access, and protect the data directory.
 
@@ -115,10 +127,11 @@ Run the offline regression suites:
 cd backend
 python test_comms.py
 python test_calendar_security.py
+python test_dev_auth.py
 python test_asterisk.py
 ```
 
-The communications suite uses a fake provider; the calendar security suite tests role enforcement; the Asterisk suite uses a fake AMI server and fake eSpeak process. None sends real WhatsApp messages or places a real telephone call. A successful Asterisk connection test confirms AMI reachability only; verify actual outbound calling, audio playback, call completion and Malawi trunk routing with a test number and explicit consent before enabling automatic calls. Flutter builds and live Meta/Asterisk integration tests must be run in the target deployment environment.
+The communications suite uses a fake provider; the calendar security suite tests role enforcement; the dev-auth suite verifies the local bypass works without a token and that production/staging still reject anonymous requests and enforce roles; the Asterisk suite uses a fake AMI server and fake eSpeak process. None sends real WhatsApp messages or places a real telephone call. A successful Asterisk connection test confirms AMI reachability only; verify actual outbound calling, audio playback, call completion and Malawi trunk routing with a test number and explicit consent before enabling automatic calls. Flutter builds and live Meta/Asterisk integration tests must be run in the target deployment environment.
 
 ## 9. Known boundaries
 

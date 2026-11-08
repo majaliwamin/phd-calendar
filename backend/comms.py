@@ -86,13 +86,39 @@ def set_cfg(c, new):
 # ---------- staff / roles ----------
 def can(role, perm): p = PERMS.get(role, set()); return "*" in p or perm in p
 def _h(t): return hashlib.sha256(t.encode()).hexdigest()
+
+# Local-development login bypass. It is only active outside a production/staging
+# environment; set CAL_ENV=production on a real deployment. CAL_DEV_AUTH=0 forces
+# it off even in development. The production check always wins over CAL_DEV_AUTH.
+PROD_ENVS = {"production", "prod", "staging", "stage"}
+ENV_KEYS = ("CAL_ENV", "APP_ENV", "ENVIRONMENT", "FASTAPI_ENV")
+DEV_HASH = "local-development-bypass"          # never matches _h(token)
+DEV_NAME = "Local developer"
+
+def environment():
+    for k in ENV_KEYS:
+        v = os.environ.get(k)
+        if v and v.strip(): return v.strip().lower()
+    return "development"
+
+def dev_auth_enabled():
+    if environment() in PROD_ENVS: return False
+    return os.environ.get("CAL_DEV_AUTH", "").strip().lower() not in ("0", "false", "no", "off")
+
+def dev_staff():
+    """Admin-equivalent identity for local development. Never persisted to the staff table."""
+    return {"id": 0, "name": DEV_NAME, "role": "admin", "token_hash": DEV_HASH, "person_id": None, "active": 1}
+
 def new_staff(c, name, role, person_id=None):
     if role not in PERMS: raise ValueError("Unknown role")
     if role == "student" and not person_id: raise ValueError("A student access token must be linked to a registered person.")
     if person_id and not one(c, "select id from people where id=? and deleted=0", person_id): raise ValueError("Linked person does not exist.")
     t = secrets.token_urlsafe(24)
     c.execute("insert into staff(name,role,token_hash,person_id) values(?,?,?,?)", (name, role, _h(t), person_id)); return t
-def auth(c, tok): return one(c, "select * from staff where token_hash=? and active=1", _h(tok)) if tok else None
+def auth(c, tok):
+    staff = one(c, "select * from staff where token_hash=? and active=1", _h(tok)) if tok else None
+    if staff: return staff
+    return dev_staff() if dev_auth_enabled() else None
 def bootstrap_admin(c):
     if c.execute("select count(*) from staff").fetchone()[0] == 0:
         t = new_staff(c, "Administrator", "admin")

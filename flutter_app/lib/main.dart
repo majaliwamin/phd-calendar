@@ -98,6 +98,14 @@ class _AuthGateState extends State<AuthGate> {
         await secureStorage.delete(key: 'staff_token');
       }
     }
+    if (_token == null) {
+      // Outside production the backend accepts a tokenless local session and
+      // reports dev=true, so the mobile shell can skip its sign-in screen too.
+      try {
+        final who = await Api.get('', '/api/comms/whoami');
+        if (who is Map && who['dev'] == true && mounted) setState(() => _token = '');
+      } catch (_) {}
+    }
     if (mounted) setState(() => _checking = false);
   }
 

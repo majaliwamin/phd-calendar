@@ -23,7 +23,8 @@ def whoami(req: Request):
     h = req.headers.get("authorization", "")
     with db.conn() as c: s = comms.auth(c, h[7:] if h.lower().startswith("bearer ") else "")
     if not s: raise HTTPException(401, "Not signed in")
-    return {"name": s["name"], "role": s["role"], "perms": sorted(comms.PERMS[s["role"]]), "tz": "Africa/Blantyre"}
+    return {"name": s["name"], "role": s["role"], "perms": sorted(comms.PERMS[s["role"]]), "tz": "Africa/Blantyre",
+            "dev": comms.dev_auth_enabled()}
 
 @router.post("/api/comms/staff")
 async def staff(req: Request):

@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);
-const S={w:0,view:'dashboard',edit:false,d:null,role:'',staffName:''};
+const S={w:0,view:'dashboard',edit:false,d:null,role:'',staffName:'',dev:false};
 const canEditCalendar=()=>['admin','coordinator'].includes(S.role);
 const PX=60,T0=480,T1=1080,SNAP=15,DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -43,7 +43,10 @@ async function api(p,m='GET',b){const token=sessionStorage.ctoken||'';const head
  const r=await fetch('/api/'+p,{method:m,headers,body:b?JSON.stringify(b):undefined}).catch(()=>{throw new Error('Cannot reach the server. Check that the backend is running.')});
  const t=await r.text();let j={};try{j=JSON.parse(t)}catch(_){}if(!r.ok)throw new Error(j.detail||t||('Request failed ('+r.status+')'));return j}
 function showCalendarLogin(message='Sign in with your staff access token to open the academic calendar.'){document.body.classList.remove('so');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Staff sign in';$('#mode').textContent='';$('#view').innerHTML=`<div class="card" style="max-width:480px;margin:8vh auto;padding:28px"><h2>PhD MNH Academic Calendar</h2><p>${esc(message)}</p><label>Staff access token<input id="calendarToken" type="password" autocomplete="current-password" placeholder="Paste administrator or staff token"></label><div class="row"><button class="btn pri" id="calendarSignIn">Sign in</button></div><small>First-run administrator token: backend/data/ADMIN_TOKEN.txt</small></div>`;$('#calendarSignIn').onclick=async()=>{sessionStorage.ctoken=$('#calendarToken').value.trim();try{await load()}catch(e){sessionStorage.removeItem('ctoken');showCalendarLogin(e.message)}}}
-async function load(){if(!sessionStorage.ctoken){showCalendarLogin();return}try{const who=await api('comms/whoami');S.role=who.role;S.staffName=who.name;S.d=await api('bootstrap');render()}catch(e){if(String(e.message).includes('401')){sessionStorage.removeItem('ctoken');showCalendarLogin(e.message)}else{alert(e.message);throw e}}}
+async function load(){
+ try{const who=await api('comms/whoami');S.role=who.role;S.staffName=who.name;S.dev=!!who.dev;S.d=await api('bootstrap');render()}
+ catch(e){const m=String(e&&e.message||e);if(/\b401\b|not signed in|sign in with/i.test(m)){sessionStorage.removeItem('ctoken');showCalendarLogin(m)}else showLoadError(m)}}
+function showLoadError(message){S.dev=false;document.body.classList.remove('so');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Calendar could not load';$('#mode').textContent='';$('#view').innerHTML=`<div class="card" style="max-width:480px;margin:8vh auto;padding:28px"><h2>Calendar could not load</h2><p>${esc(message)}</p><div class="row"><button class="btn pri" id="retryLoad">Retry</button></div><small>Check that the backend is running and reachable.</small></div>`;$('#retryLoad').onclick=()=>load()}
 function conflicts(e){return S.d.events.filter(o=>o.id!=e.id&&o.date==e.date&&(()=>{const a=mins(e.start),b=mins(o.start);
  return a==null||b==null||(a<mins(o.end)&&b<mins(e.end))})())}
 const inWeek=w=>S.d.events.filter(e=>e.date>=iso(dayN(w*7))&&e.date<=iso(dayN(w*7+6)));
@@ -55,7 +58,7 @@ function chrome(){
  $('#nav').innerHTML=SIDE().map(it=>it.w!=null?`<button class="wk ${it.w==S.w?'on':''}" data-w="${it.w}" title="${esc(wkName(it.w))}: ${range(it.w)}"><b>${esc(wkName(it.w))}</b><span>${range(it.w)}</span></button>`:`<button data-v="${it.k}" class="${it.k==S.view?'on':''}">${it.n}</button>`).join('');
  $('#me').innerHTML=meChip();
  $('#ttl').textContent=({dashboard:S.d.settings.title,weekly:wkName(S.w)+' · '+range(S.w)}[S.view])||navItems().find(n=>n[0]==S.view)?.[1]||'Academic Calendar';
- $('#mode').textContent=S.edit?'Editor ON':'';}
+ $('#mode').textContent=[S.edit?'Editor ON':'',S.dev?'Dev mode – no sign-in':''].filter(Boolean).join(' · ');}
 function render(){if(S.view=='editor'&&!canEditCalendar())S.view='dashboard';document.body.classList.remove('so');chrome();$('#view').innerHTML=({dashboard,weekly:()=>weeklyHTML(),monthly,modules,facilitators,editor,histV,exportV,settings,exams:examsV,recur:recurV,comms:commsV,history:histV})[S.view==='history'?'histV':S.view]();}
 /* ---------- weekly grid ---------- */
 const pos=e=>{const a=Math.max(mins(e.start),T0),b=Math.min(mins(e.end),T1);return b>a?{top:(a-T0)*PX/60,h:(b-a)*PX/60}:null};
@@ -162,7 +165,7 @@ async function saveFac(id){const ch={};['name','designation','module_id','contac
 function facPhoto(id){avEditor('Photo – '+fac(id).name,async(blob,out,prog)=>{await uploadAvatar(id,blob,prog);await load();dr('')},()=>facForm(id))}
 function meAvatar(){avEditor('Your profile photo',async(blob,out,prog)=>{const t=document.createElement('canvas');t.width=t.height=192;t.getContext('2d').drawImage(out,0,0,192,192);localStorage.editorAv=t.toDataURL('image/jpeg',.85);prog(100);dr('');render()},()=>dr(''))}
 const meChip=()=>{const n=S.staffName||localStorage.editor||'';return n?(localStorage.editorAv?`<img class="av" style="width:28px;height:28px" src="${localStorage.editorAv}" alt="">`:`<span class="av ini" style="width:28px;height:28px;font-size:11px">${esc(ini(n))}</span>`)+`<small>${esc(n)}</small>`:''};
-function uploadAvatar(id,blob,prog){return new Promise((res,rej)=>{if(!sessionStorage.ctoken)return rej(new Error('Sign in with a staff token first.'));const x=new XMLHttpRequest(),fd=new FormData();fd.append('file',blob,'avatar.jpg');x.open('POST',`/api/facilitators/${id}/avatar`);x.timeout=60000;x.setRequestHeader('Authorization','Bearer '+(sessionStorage.ctoken||''));
+function uploadAvatar(id,blob,prog){return new Promise((res,rej)=>{const x=new XMLHttpRequest(),fd=new FormData();fd.append('file',blob,'avatar.jpg');x.open('POST',`/api/facilitators/${id}/avatar`);x.timeout=60000;x.setRequestHeader('Authorization','Bearer '+(sessionStorage.ctoken||''));
  x.setRequestHeader('Authorization','Bearer '+(sessionStorage.ctoken||''));x.upload.onprogress=e=>e.lengthComputable&&prog(Math.round(e.loaded/e.total*100));
  x.onload=()=>{if(x.status<300)res(JSON.parse(x.responseText));else{let m='Upload failed ('+x.status+').';try{m=JSON.parse(x.responseText).detail||m}catch(_){}rej(new Error(m))}};
  x.onerror=()=>rej(new Error('Cannot reach the server. Is the backend running?'));x.ontimeout=()=>rej(new Error('Upload timed out.'));x.send(fd)})}

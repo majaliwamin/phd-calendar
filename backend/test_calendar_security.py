@@ -1,6 +1,7 @@
 """Offline authorization tests for the calendar API policy helper."""
 import os, tempfile
 os.environ["CAL_DATA"] = tempfile.mkdtemp(prefix="mnh-calendar-auth-")
+os.environ["CAL_DEV_AUTH"] = "0"          # test the real token policy, not the local bypass
 import db, comms, main
 from starlette.requests import Request
 from fastapi import HTTPException

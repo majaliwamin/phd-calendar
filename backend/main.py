@@ -30,6 +30,9 @@ async def _start():
     with db.conn() as c:
         comms.init(c)
         comms.bootstrap_admin(c)
+    if comms.dev_auth_enabled():
+        print(f"[auth] Development login bypass ON ({comms.environment()}): requests without a staff token use an admin-equivalent local session.")
+        print("[auth] Set CAL_ENV=production to require staff access tokens.")
     asyncio.create_task(_worker())
     threading.Thread(target=comms.asterisk_event_monitor, name="asterisk-ami-events", daemon=True).start()
 
