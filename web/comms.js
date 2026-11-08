@@ -11,7 +11,7 @@ async function commsLoad(){const b=document.getElementById('cbody');if(!b)return
  try{CM.me=await capi('whoami')}catch(e){CM.me=null}
  if(['student','class_rep'].includes(CM.me?.role)&&CM.tab=='overview')CM.tab='student';
  document.getElementById('cwho').textContent=CM.me?`Signed in: ${CM.me.name} (${CM.me.role}) · times in ${CM.me.tz}`:'Not signed in';
- if(!CM.me&&CM.tab!='access')return b.innerHTML='<div class="card">Sign in with a staff access token under <b>Access</b>. On first run the administrator token is in <code>backend/data/ADMIN_TOKEN.txt</code>.</div>';
+ if(!CM.me&&CM.tab!='access')return b.innerHTML='<div class="card">Sign in with a staff access token under <b>Access</b>.</div>';
  try{b.innerHTML=await CV[CM.tab]()}catch(e){b.innerHTML=`<div class="warn">${esc(e.message)}</div>`}}
 const can=p=>CM.me&&(CM.me.perms.includes('*')||CM.me.perms.includes(p));
 const CV={

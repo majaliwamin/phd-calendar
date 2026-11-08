@@ -88,3 +88,22 @@ option{background:var(--card);color:var(--ink)}
 .vid{width:100%;border-radius:8px;background:#000;display:block;margin:8px 0}.cropcv{width:100%;max-width:280px;display:block;margin:10px auto;border-radius:8px;touch-action:none;cursor:grab}
 .avrow{display:flex;align-items:center;gap:12px;margin:8px 0}.avrow .av{margin:0}.me{display:flex;align-items:center;gap:6px}.me small{color:var(--muted)}
 progress{accent-color:var(--accent)}#av_msg{min-height:20px;margin-top:6px;font-size:13px}
+/* ---- v5: top-bar weekday + duration controls, minimal sign-in ---- */
+.tools{flex-wrap:wrap;justify-content:flex-end}
+.daypick{display:flex;gap:2px;align-items:center}
+.daypick button{min-width:38px;padding:5px 7px}
+.daypick button.on{background:var(--head);color:var(--headink);border-color:var(--head)}
+.toolsel{display:flex;flex-direction:column;gap:1px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.toolsel select{padding:3px 6px;min-height:34px}
+.login{display:flex;justify-content:center;padding:7vh 0}
+.login-card{width:100%;max-width:430px;padding:28px}
+.login-card h2{margin:0 0 6px;font-size:22px}
+.login-status{margin:0 0 10px;color:var(--muted)}
+.login-card label{display:block;margin-top:12px;font-size:12px;color:var(--muted)}
+.login-card input{width:100%;margin-top:4px;padding:8px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:3px}
+.login-card .row{margin-top:16px}
+.cal.one{grid-template-columns:54px minmax(240px,1fr);min-width:0}
+.cal.one .off{display:none}
+body.login-mode #side,body.login-mode #bar{display:none}
+body.login-mode #view{padding:0}
+@media(max-width:800px){.tools{justify-content:flex-start}.daypick button{min-width:34px;padding:4px 5px}.toolsel{font-size:9px}}

@@ -16,7 +16,7 @@ Open `http://127.0.0.1:8000`. Data is stored in `backend/data/` and persists acr
 
 ### Local development sign-in bypass
 
-Outside production the backend starts a local development session automatically: the browser opens straight into the dashboard and API requests are authorised as an admin-equivalent **Local developer** staff account. No token, staff credentials, or manual sign-in is needed locally. This only bypasses *authentication* — role checks, audit history and stored records behave exactly as before.
+Outside production the backend starts a local development session automatically: the browser opens straight into the dashboard and API requests are authorised as an admin-equivalent **Aminiology Ma** staff account. No token, staff credentials, or manual sign-in is needed locally. This only bypasses *authentication* — role checks, audit history and stored records behave exactly as before.
 
 The mode is decided by the environment on every start:
 

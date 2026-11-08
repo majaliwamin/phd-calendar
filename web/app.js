@@ -1,5 +1,6 @@
 const $=s=>document.querySelector(s);
-const S={w:0,view:'dashboard',edit:false,d:null,role:'',staffName:'',dev:false};
+const S={w:0,view:'dashboard',edit:false,d:null,role:'',staffName:'',dev:false,day:-1,dur:60};
+try{const d=+localStorage.calDur;if([30,45,60,90,120].includes(d))S.dur=d}catch(_){}
 const canEditCalendar=()=>['admin','coordinator'].includes(S.role);
 const PX=60,T0=480,T1=1080,SNAP=15,DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -40,13 +41,21 @@ const av=(f,s=22)=>!f?'':f.avatar?`<img class="av" data-fac="${f.id}" style="wid
  `<span class="av ini" data-fac="${f.id}" style="width:${s}px;height:${s}px;font-size:${s*.4}px">${esc(ini(f.name||'?'))}</span>`;
 const me=()=>{let n=localStorage.editor;if(!n){n=(prompt('Enter your name (recorded as the editor in Activity History):')||'').trim();if(n)localStorage.editor=n}return n};
 async function api(p,m='GET',b){const token=sessionStorage.ctoken||'';const headers={'Content-Type':'application/json'};if(token)headers.Authorization='Bearer '+token;
- const r=await fetch('/api/'+p,{method:m,headers,body:b?JSON.stringify(b):undefined}).catch(()=>{throw new Error('Cannot reach the server. Check that the backend is running.')});
+ const r=await fetch('/api/'+p,{method:m,headers,body:b?JSON.stringify(b):undefined}).catch(()=>{throw new Error('Cannot reach the server.')});
  const t=await r.text();let j={};try{j=JSON.parse(t)}catch(_){}if(!r.ok)throw new Error(j.detail||t||('Request failed ('+r.status+')'));return j}
-function showCalendarLogin(message='Sign in with your staff access token to open the academic calendar.'){document.body.classList.remove('so');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Staff sign in';$('#mode').textContent='';$('#view').innerHTML=`<div class="card" style="max-width:480px;margin:8vh auto;padding:28px"><h2>PhD MNH Academic Calendar</h2><p>${esc(message)}</p><label>Staff access token<input id="calendarToken" type="password" autocomplete="current-password" placeholder="Paste administrator or staff token"></label><div class="row"><button class="btn pri" id="calendarSignIn">Sign in</button></div><small>First-run administrator token: backend/data/ADMIN_TOKEN.txt</small></div>`;$('#calendarSignIn').onclick=async()=>{sessionStorage.ctoken=$('#calendarToken').value.trim();try{await load()}catch(e){sessionStorage.removeItem('ctoken');showCalendarLogin(e.message)}}}
+function showCalendarLogin(message=''){document.body.classList.remove('so');document.body.classList.add('login-mode');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Staff sign in';$('#mode').textContent='';
+ let email='staff@ams';try{email=localStorage.calEmail||email}catch(_){}
+ $('#view').innerHTML=`<div class="login"><div class="card login-card"><h2>PhD MNH Academic Calendar</h2><p class="login-status">Not signed in</p><label>Email<input id="calendarEmail" type="email" autocomplete="username" value="${esc(email)}"></label><label>Staff access token<input id="calendarToken" type="password" autocomplete="current-password"></label><div class="row"><button class="btn pri" id="calendarSignIn">Sign in</button></div><div id="calendarLoginError" class="warn" role="alert"${message?'':' hidden'}>${esc(message)}</div></div></div>`;
+ const token=$('#calendarToken'),err=$('#calendarLoginError');
+ const go=async()=>{const t=token.value.trim();if(!t){err.textContent='Enter a staff access token.';err.hidden=false;token.focus();return}
+  try{localStorage.calEmail=$('#calendarEmail').value.trim()||'staff@ams'}catch(_){}
+  sessionStorage.ctoken=t;const b=$('#calendarSignIn');b.disabled=true;b.textContent='Signing in…';
+  try{await load()}catch(e){sessionStorage.removeItem('ctoken');showCalendarLogin(e.message)}};
+ $('#calendarSignIn').onclick=go;token.onkeydown=e=>{if(e.key=='Enter'){e.preventDefault();go()}}}
 async function load(){
  try{const who=await api('comms/whoami');S.role=who.role;S.staffName=who.name;S.dev=!!who.dev;S.d=await api('bootstrap');render()}
- catch(e){const m=String(e&&e.message||e);if(/\b401\b|not signed in|sign in with/i.test(m)){sessionStorage.removeItem('ctoken');showCalendarLogin(m)}else showLoadError(m)}}
-function showLoadError(message){S.dev=false;document.body.classList.remove('so');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Calendar could not load';$('#mode').textContent='';$('#view').innerHTML=`<div class="card" style="max-width:480px;margin:8vh auto;padding:28px"><h2>Calendar could not load</h2><p>${esc(message)}</p><div class="row"><button class="btn pri" id="retryLoad">Retry</button></div><small>Check that the backend is running and reachable.</small></div>`;$('#retryLoad').onclick=()=>load()}
+ catch(e){const m=String(e&&e.message||e);if(/\b401\b|not signed in|sign in with|invalid or expired/i.test(m)){const had=!!sessionStorage.ctoken;sessionStorage.removeItem('ctoken');showCalendarLogin(had?'Invalid or expired staff access token.':'')}else showLoadError(m)}}
+function showLoadError(message){S.dev=false;document.body.classList.remove('so','login-mode');$('#nav').innerHTML='';$('#me').textContent='';$('#ttl').textContent='Calendar could not load';$('#mode').textContent='';$('#view').innerHTML=`<div class="card" style="max-width:480px;margin:8vh auto;padding:28px"><h2>Calendar could not load</h2><p>${esc(message)}</p><div class="row"><button class="btn pri" id="retryLoad">Retry</button></div></div>`;$('#retryLoad').onclick=()=>load()}
 function conflicts(e){return S.d.events.filter(o=>o.id!=e.id&&o.date==e.date&&(()=>{const a=mins(e.start),b=mins(o.start);
  return a==null||b==null||(a<mins(o.end)&&b<mins(e.end))})())}
 const inWeek=w=>S.d.events.filter(e=>e.date>=iso(dayN(w*7))&&e.date<=iso(dayN(w*7+6)));
@@ -58,8 +67,10 @@ function chrome(){
  $('#nav').innerHTML=SIDE().map(it=>it.w!=null?`<button class="wk ${it.w==S.w?'on':''}" data-w="${it.w}" title="${esc(wkName(it.w))}: ${range(it.w)}"><b>${esc(wkName(it.w))}</b><span>${range(it.w)}</span></button>`:`<button data-v="${it.k}" class="${it.k==S.view?'on':''}">${it.n}</button>`).join('');
  $('#me').innerHTML=meChip();
  $('#ttl').textContent=({dashboard:S.d.settings.title,weekly:wkName(S.w)+' · '+range(S.w)}[S.view])||navItems().find(n=>n[0]==S.view)?.[1]||'Academic Calendar';
- $('#mode').textContent=[S.edit?'Editor ON':'',S.dev?'Dev mode – no sign-in':''].filter(Boolean).join(' · ');}
-function render(){if(S.view=='editor'&&!canEditCalendar())S.view='dashboard';document.body.classList.remove('so');chrome();$('#view').innerHTML=({dashboard,weekly:()=>weeklyHTML(),monthly,modules,facilitators,editor,histV,exportV,settings,exams:examsV,recur:recurV,comms:commsV,history:histV})[S.view==='history'?'histV':S.view]();}
+ $('#mode').textContent=[S.edit?'Editor ON':'',S.dev?'Dev mode – no sign-in':''].filter(Boolean).join(' · ');
+ const dur=$('#dur');if(dur)dur.value=String(S.dur);
+ document.querySelectorAll('#daypick [data-day]').forEach(b=>b.classList.toggle('on',b.dataset.day=='all'?S.day<0:+b.dataset.day==S.day));}
+function render(){if(S.view=='editor'&&!canEditCalendar())S.view='dashboard';document.body.classList.remove('so','login-mode');chrome();$('#view').innerHTML=({dashboard,weekly:()=>weeklyHTML(),monthly,modules,facilitators,editor,histV,exportV,settings,exams:examsV,recur:recurV,comms:commsV,history:histV})[S.view==='history'?'histV':S.view]();}
 /* ---------- weekly grid ---------- */
 const pos=e=>{const a=Math.max(mins(e.start),T0),b=Math.min(mins(e.end),T1);return b>a?{top:(a-T0)*PX/60,h:(b-a)*PX/60}:null};
 function lanes(evs){const s=[...evs].sort((a,b)=>mins(a.start)-mins(b.start)||mins(b.end)-mins(a.end)),out=[];let g=[],end=0;
@@ -68,12 +79,12 @@ function lanes(evs){const s=[...evs].sort((a,b)=>mins(a.start)-mins(b.start)||mi
 const stOf=e=>e.status=='cancelled'?'cancelled':(new Date(`${e.date}T${e.end||'23:59'}:00`)<new Date()?'completed':'upcoming');
 function evHTML(e){const p=pos(e);if(!p)return'';const f=fac(e.facilitator_id),m=mod(e.module_id),c=conflicts(e).length,w=100/e._n;
  return `<div class="ev k-${e.kind} ${e.status=='cancelled'?'cx':''}" data-id="${e.id}" style="top:${p.top}px;height:${p.h}px;left:calc(${e._l*w}% + 2px);width:calc(${w}% - 4px);background:${color(e)};color:${inkFor(color(e))};border-left:5px solid ${m?m.color:'rgba(0,0,0,.3)'}"><b>${c?'⚠ ':''}${esc(e.title)}</b>${e.start}–${e.end}${m?' · '+esc(m.code):''}${f?'<br>'+av(f,16)+esc(f.name):''}${e.venue?'<br>'+esc(e.venue):''}<div class="rs"></div></div>`}
-function weeklyHTML(){const evs=inWeek(S.w);let h='<div class="cal"><div></div>';
- for(let i=0;i<7;i++){const d=dayN(S.w*7+i);h+=`<div class="hd ${iso(d)==TODAY()?'today':''}">${DAYS[i]}<small>${F(d,{day:'numeric',month:'short'})}</small></div>`}
+function weeklyHTML(){const evs=inWeek(S.w),one=S.view==='weekly'&&S.day>=0;let h='<div class="cal'+(one?' one':'')+'"><div></div>';
+ for(let i=0;i<7;i++){const d=dayN(S.w*7+i);h+=`<div class="hd ${iso(d)==TODAY()?'today':''}${one&&i!=S.day?' off':''}">${DAYS[i]}<small>${F(d,{day:'numeric',month:'short'})}</small></div>`}
  h+='<div class="un"></div>';
- for(let i=0;i<7;i++)h+=`<div class="un">${evs.filter(e=>e.date==iso(dayN(S.w*7+i))&&!e.start).map(e=>`<span class="chip" data-id="${e.id}" style="background:${color(e)};color:${inkFor(color(e))}">⚠ ${esc(e.title)} (time not confirmed)</span>`).join('')}</div>`;
+ for(let i=0;i<7;i++)h+=`<div class="un${one&&i!=S.day?' off':''}">${evs.filter(e=>e.date==iso(dayN(S.w*7+i))&&!e.start).map(e=>`<span class="chip" data-id="${e.id}" style="background:${color(e)};color:${inkFor(color(e))}">⚠ ${esc(e.title)} (time not confirmed)</span>`).join('')}</div>`;
  h+='<div class="tl">'+[...Array((T1-T0)/60+1)].map((_,i)=>`<span style="top:${i*PX}px">${hhmm(T0+i*60)}</span>`).join('')+'</div>';
- for(let i=0;i<7;i++){const ds=iso(dayN(S.w*7+i));h+=`<div class="col ${i>4?'we':''}" data-date="${ds}">${lanes(evs.filter(e=>e.date==ds&&e.start)).map(evHTML).join('')}</div>`}
+ for(let i=0;i<7;i++){const ds=iso(dayN(S.w*7+i));h+=`<div class="col ${i>4?'we':''}${one&&i!=S.day?' off':''}" data-date="${ds}">${lanes(evs.filter(e=>e.date==ds&&e.start)).map(evHTML).join('')}</div>`}
  return h+'</div>'+legendHTML()+'<p style="color:var(--muted);font-size:12px">Each row is one hour; sessions keep their exact start/end. Click an empty slot to create · drag to move · drag the bottom edge to resize · ⚠ marks conflicts.</p>'}
 const upcoming=()=>S.d.events.filter(e=>stOf(e)=='upcoming').sort((a,b)=>(a.date+(a.start||'')).localeCompare(b.date+(b.start||'')));
 const dT=e=>`${F(new Date(e.date),{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'})}${e.start?' '+e.start+'–'+e.end:''}`;
@@ -168,7 +179,7 @@ const meChip=()=>{const n=S.staffName||localStorage.editor||'';return n?(localSt
 function uploadAvatar(id,blob,prog){return new Promise((res,rej)=>{const x=new XMLHttpRequest(),fd=new FormData();fd.append('file',blob,'avatar.jpg');x.open('POST',`/api/facilitators/${id}/avatar`);x.timeout=60000;x.setRequestHeader('Authorization','Bearer '+(sessionStorage.ctoken||''));
  x.setRequestHeader('Authorization','Bearer '+(sessionStorage.ctoken||''));x.upload.onprogress=e=>e.lengthComputable&&prog(Math.round(e.loaded/e.total*100));
  x.onload=()=>{if(x.status<300)res(JSON.parse(x.responseText));else{let m='Upload failed ('+x.status+').';try{m=JSON.parse(x.responseText).detail||m}catch(_){}rej(new Error(m))}};
- x.onerror=()=>rej(new Error('Cannot reach the server. Is the backend running?'));x.ontimeout=()=>rej(new Error('Upload timed out.'));x.send(fd)})}
+ x.onerror=()=>rej(new Error('Cannot reach the server.'));x.ontimeout=()=>rej(new Error('Upload timed out.'));x.send(fd)})}
 const decodeImg=b=>new Promise((res,rej)=>{const u=URL.createObjectURL(b),i=new Image();i.onload=()=>{URL.revokeObjectURL(u);res(i)};i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('decode'))};i.src=u});
 function avEditor(title,onSave,onBack){
  let img=null,rot=0,zoom=1,ox=0,oy=0,stream=null,facing='user',src='file';const SZ=280,$$=i=>document.getElementById(i);
@@ -283,7 +294,7 @@ async function pdfExport(){dl(pdfBlob(await dashCanvas()),`dashboard-week${11+S.
 /* ---------- events ---------- */
 document.addEventListener('click',async e=>{const t=e.target,q=s=>t.closest(s);
  if(!q('.dl'))$('#dlmenu').hidden=true;
- if(q('#pw')||q('#nw')){S.w=Math.min(NWK()-1,Math.max(0,S.w+(q('#nw')?1:-1)));S.view=S.view=='dashboard'?'dashboard':'weekly';render()}else if(q('#today')){const k=Math.floor((new Date(TODAY()+'T00:00:00Z')-dayN(0))/864e5/7);S.w=Math.min(NWK()-1,Math.max(0,k));render()}else if(q('[data-go]')){S.view=q('[data-go]').dataset.go;render()}else if(q('#menu')){document.body.classList.toggle(innerWidth<800?'so':'sc')}else if(q('#dlbtn'))$('#dlmenu').hidden=!$('#dlmenu').hidden;
+ if(q('#pw')||q('#nw')){S.w=Math.min(NWK()-1,Math.max(0,S.w+(q('#nw')?1:-1)));S.view=S.view=='dashboard'?'dashboard':'weekly';render()}else if(q('#today')){const k=Math.floor((new Date(TODAY()+'T00:00:00Z')-dayN(0))/864e5/7);S.w=Math.min(NWK()-1,Math.max(0,k));render()}else if(q('#daypick [data-day]')){const v=q('#daypick [data-day]').dataset.day;S.day=v=='all'?-1:+v;S.view='weekly';dr('');render()}else if(q('[data-go]')){S.view=q('[data-go]').dataset.go;render()}else if(q('#menu')){document.body.classList.toggle(innerWidth<800?'so':'sc')}else if(q('#dlbtn'))$('#dlmenu').hidden=!$('#dlmenu').hidden;
  else if(q('[data-x]')){const x=q('[data-x]').dataset.x;$('#dlmenu').hidden=true;if(x=='png')pngExport();else if(x=='pdf')pdfExport();else await downloadProtected(`/api/export/${x}?week=${S.w}`,`week${11+S.w}.${x}`)}
  else if(q('[data-backup]'))await downloadProtected('/api/backup','calendar-backup.json');
  else if(q('[data-ics]'))await downloadProtected('/api/ics','calendar.ics');
@@ -291,7 +302,7 @@ document.addEventListener('click',async e=>{const t=e.target,q=s=>t.closest(s);
  else if(q('[data-v]')){S.view=q('[data-v]').dataset.v;dr('');render()}
  else if(q('.av[data-fac]'))facCard(q('.av').dataset.fac);
  else if(q('.ev')||q('.chip[data-id]')){if(q('.chip'))S.edit?form(+q('.chip').dataset.id):details(+q('.chip').dataset.id)}
- else if(q('.col')&&!q('.ev')&&S.edit&&canEditCalendar()){const c=q('.col'),y=e.clientY-c.getBoundingClientRect().top,s=T0+Math.floor(y/PX*60/SNAP)*SNAP;form(0,{date:c.dataset.date,start:hhmm(s),end:hhmm(Math.min(s+120,T1))})}
+ else if(q('.col')&&!q('.ev')&&S.edit&&canEditCalendar()){const c=q('.col'),y=e.clientY-c.getBoundingClientRect().top,s=T0+Math.floor(y/PX*60/SNAP)*SNAP;form(0,{date:c.dataset.date,start:hhmm(s),end:hhmm(Math.min(s+S.dur,T1))})}
  else if(q('[data-mod]'))modForm(+q('[data-mod]').dataset.mod);
  else if(q('[data-fac-edit]'))facForm(+q('[data-fac-edit]').dataset.facEdit);
  else if(q('[data-fac-new]'))facForm(0);
@@ -301,9 +312,9 @@ document.addEventListener('click',async e=>{const t=e.target,q=s=>t.closest(s);
  else if(q('#tgl')&&canEditCalendar()){S.edit=!S.edit;render()}
  else if(q('#sv')){localStorage.editor=$('#ed').value.trim();if(!localStorage.editor)delete localStorage.editor;await api('settings/0','PUT',{title:$('#pt').value});load()}else if(q('#calendarSignOut')){sessionStorage.removeItem('ctoken');load()}
  else if(q('#undo'))act('undo');else if(q('#redo'))act('redo')});
-document.addEventListener('change',async e=>{const t=e.target;if(t.id=='theme'||t.id=='themeS'){setTheme(t.value);return}if(t.id=='cbg'){localStorage.bgc=t.value;setTheme('custom');return}if(t.classList&&t.classList.contains('tcol')){await api('settings/0','PUT',{['tc_'+t.dataset.t]:t.value});load();return}if(e.target.id=='rst'){const r=await api('restore','POST',JSON.parse(await e.target.files[0].text()));load()}});
+document.addEventListener('change',async e=>{const t=e.target;if(t.id=='dur'){const v=+t.value;if([30,45,60,90,120].includes(v)){S.dur=v;try{localStorage.calDur=v}catch(_){}}return}if(t.id=='theme'||t.id=='themeS'){setTheme(t.value);return}if(t.id=='cbg'){localStorage.bgc=t.value;setTheme('custom');return}if(t.classList&&t.classList.contains('tcol')){await api('settings/0','PUT',{['tc_'+t.dataset.t]:t.value});load();return}if(e.target.id=='rst'){const r=await api('restore','POST',JSON.parse(await e.target.files[0].text()));load()}});
 document.addEventListener('dblclick',async e=>{if(S.edit&&e.target.id=='ttl'){const n=prompt('Programme title',S.d.settings.title);if(n){await api('settings/0','PUT',{title:n});load()}}});
 let BUSY=false;for(const n of ['saveEv','saveFac','dup','del','saveMod','delFac','rmAv']){const o=window[n];window[n]=async(...a)=>{if(BUSY)return;BUSY=true;const bt=[...document.querySelectorAll('#drawer .btn')];bt.forEach(b=>b.disabled=true);try{await o(...a)}catch(e){if(e)console.error(e)}finally{BUSY=false;bt.forEach(b=>b.disabled=false)}}}
 addEventListener('keydown',e=>{if(e.key=='Escape'){$('#dlmenu').hidden=true;closeDrawer()}});$('#drawer').addEventListener('input',()=>{DIRTY=true});
-applyTheme();$('#theme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');$('#theme').value=curTheme();
+applyTheme();$('#theme').innerHTML=THEMES.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');$('#theme').value=curTheme();$('#dur').value=String(S.dur);
 load();

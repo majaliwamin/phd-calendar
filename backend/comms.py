@@ -93,7 +93,7 @@ def _h(t): return hashlib.sha256(t.encode()).hexdigest()
 PROD_ENVS = {"production", "prod", "staging", "stage"}
 ENV_KEYS = ("CAL_ENV", "APP_ENV", "ENVIRONMENT", "FASTAPI_ENV")
 DEV_HASH = "local-development-bypass"          # never matches _h(token)
-DEV_NAME = "Local developer"
+DEV_NAME = "Aminiology Ma"
 
 def environment():
     for k in ENV_KEYS:
